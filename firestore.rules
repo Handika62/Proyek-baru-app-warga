@@ -1,0 +1,150 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: userId (UID)
+    // Fields:
+    //   - uid: string (required)
+    //   - name: string (required)
+    //   - email: string (required)
+    //   - role: string (required, 'admin' or 'resident')
+    //   - nik: string (optional, 16 digits)
+    //   - kk: string (optional, 16 digits)
+    //   - whatsapp: string (optional)
+    //   - birthPlace: string (optional)
+    //   - birthDate: string (optional, YYYY-MM-DD)
+    //   - gender: string (optional, 'Laki-laki' or 'Perempuan')
+    //   - occupation: string (optional)
+    //   - maritalStatus: string (optional)
+    //   - address: string (optional)
+    //   - phone: string (optional)
+    //   - createdAt: timestamp (optional)
+    //
+    // Collection: announcements
+    // Document ID: auto-generated
+    // Fields:
+    //   - title: string (required)
+    //   - content: string (required)
+    //   - authorId: string (required)
+    //   - createdAt: timestamp (required)
+    //
+    // Collection: payments
+    // Document ID: auto-generated
+    // Fields:
+    //   - userId: string (required)
+    //   - amount: number (required)
+    //   - month: string (required)
+    //   - year: number (required)
+    //   - status: string (required, 'pending' or 'paid')
+    //   - createdAt: timestamp (required)
+    //
+    // Collection: letterRequests
+    // Document ID: auto-generated
+    // Fields:
+    //   - userId: string (required)
+    //   - type: string (required)
+    //   - status: string (required, 'pending', 'approved', 'rejected')
+    //   - reason: string (optional)
+    //   - createdAt: timestamp (required)
+    //
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        ((exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
+         (request.auth.token.email == "handikacibinong@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'name', 'email', 'role']) &&
+             data.keys().hasOnly(['uid', 'name', 'email', 'role', 'nik', 'kk', 'whatsapp', 'birthPlace', 'birthDate', 'gender', 'occupation', 'maritalStatus', 'address', 'phone', 'houseNumber', 'houseBlock', 'createdAt', 'updatedAt']) &&
+             data.uid is string && data.uid.size() > 0 &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.email is string && data.email.matches('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$') &&
+             data.role in ['admin', 'resident'] &&
+             (!('nik' in data) || (data.nik is string && data.nik.size() == 16)) &&
+             (!('kk' in data) || (data.kk is string && data.kk.size() == 16)) &&
+             (!('whatsapp' in data) || (data.whatsapp is string && data.whatsapp.size() >= 10 && data.whatsapp.size() <= 15)) &&
+             (!('birthPlace' in data) || (data.birthPlace is string && data.birthPlace.size() < 100)) &&
+             (!('birthDate' in data) || (data.birthDate is string && data.birthDate.matches('^\\d{4}-\\d{2}-\\d{2}$'))) &&
+             (!('gender' in data) || (data.gender in ['Laki-laki', 'Perempuan'])) &&
+             (!('occupation' in data) || (data.occupation is string && data.occupation.size() < 100)) &&
+             (!('maritalStatus' in data) || (data.maritalStatus in ['Belum Kawin', 'Kawin', 'Cerai Hidup', 'Cerai Mati'])) &&
+             (!('address' in data) || (data.address is string && data.address.size() < 500)) &&
+             (!('phone' in data) || (data.phone is string && data.phone.size() < 20)) &&
+             (!('houseNumber' in data) || (data.houseNumber is string && data.houseNumber.size() < 20)) &&
+             (!('houseBlock' in data) || (data.houseBlock is string && data.houseBlock.size() < 10)) &&
+             (!('createdAt' in data) || (data.createdAt is timestamp)) &&
+             (!('updatedAt' in data) || (data.updatedAt is timestamp));
+    }
+
+    function isValidAnnouncement(data) {
+      return data.keys().hasAll(['title', 'content', 'authorId', 'createdAt']) &&
+             data.keys().hasOnly(['title', 'content', 'authorId', 'createdAt']) &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.content is string && data.content.size() > 0 && data.content.size() < 5000 &&
+             data.authorId is string && data.authorId == request.auth.uid &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidPayment(data) {
+      return data.keys().hasAll(['userId', 'amount', 'month', 'year', 'status', 'createdAt']) &&
+             data.keys().hasOnly(['userId', 'amount', 'month', 'year', 'status', 'createdAt']) &&
+             data.userId is string && data.userId.size() > 0 &&
+             data.amount is number && data.amount >= 0 &&
+             data.month is string && data.month.size() > 0 &&
+             data.year is number && data.year >= 2000 &&
+             data.status in ['pending', 'paid'] &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidLetterRequest(data) {
+      return data.keys().hasAll(['userId', 'type', 'status', 'createdAt']) &&
+             data.keys().hasOnly(['userId', 'type', 'status', 'createdAt', 'reason']) &&
+             data.userId is string && data.type is string && data.type.size() > 0 &&
+             data.status in ['pending', 'approved', 'rejected'] &&
+             data.createdAt is timestamp;
+    }
+
+    // Rules
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == 'resident' || isAdmin());
+      allow update: if isAuthenticated() && (isOwner(userId) || isAdmin()) && isValidUser(request.resource.data) && (request.resource.data.role == resource.data.role || isAdmin());
+    }
+
+    match /announcements/{announcementId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAdmin() && isValidAnnouncement(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /payments/{paymentId} {
+      allow read: if isAuthenticated() && (isOwner(resource.data.userId) || isAdmin());
+      allow create: if isAuthenticated() && (isOwner(request.resource.data.userId) || isAdmin()) && isValidPayment(request.resource.data);
+      allow update: if isAdmin() && isValidPayment(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /letterRequests/{requestId} {
+      allow read: if isAuthenticated() && (isOwner(resource.data.userId) || isAdmin());
+      allow create: if isAuthenticated() && isOwner(request.resource.data.userId) && isValidLetterRequest(request.resource.data);
+      allow update: if isAdmin() && isValidLetterRequest(request.resource.data);
+      allow delete: if isAdmin();
+    }
+  }
+}

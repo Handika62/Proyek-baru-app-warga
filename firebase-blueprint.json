@@ -1,0 +1,90 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Resident or Admin user profile",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "resident"] },
+        "nik": { "type": "string", "description": "Nomor Induk Kependudukan (16 digits)" },
+        "kk": { "type": "string", "description": "Nomor Kartu Keluarga (16 digits)" },
+        "whatsapp": { "type": "string", "description": "WhatsApp phone number" },
+        "birthPlace": { "type": "string", "description": "Place of birth" },
+        "birthDate": { "type": "string", "description": "Date of birth (YYYY-MM-DD)" },
+        "gender": { "type": "string", "enum": ["Laki-laki", "Perempuan"] },
+        "occupation": { "type": "string", "description": "Job/Occupation" },
+        "maritalStatus": { "type": "string", "enum": ["Belum Kawin", "Kawin", "Cerai Hidup", "Cerai Mati"] },
+        "address": { "type": "string" },
+        "phone": { "type": "string" },
+        "houseNumber": { "type": "string", "description": "House number (e.g., 12)" },
+        "houseBlock": { "type": "string", "description": "House block (e.g., A)" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "name", "email", "role"]
+    },
+    "Announcement": {
+      "title": "Announcement",
+      "description": "Information from RT head",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "authorId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "content", "authorId", "createdAt"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "Monthly dues (Iuran)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "amount": { "type": "number" },
+        "month": { "type": "string" },
+        "year": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "paid"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "amount", "month", "year", "status"]
+    },
+    "LetterRequest": {
+      "title": "LetterRequest",
+      "description": "Administrative letter requests",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "type": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "reason": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "type", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/announcements/{announcementId}": {
+      "schema": "Announcement",
+      "description": "RT Announcements"
+    },
+    "/payments/{paymentId}": {
+      "schema": "Payment",
+      "description": "Resident payments"
+    },
+    "/letterRequests/{requestId}": {
+      "schema": "LetterRequest",
+      "description": "Letter requests"
+    }
+  }
+}
