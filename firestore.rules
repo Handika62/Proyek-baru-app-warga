@@ -103,13 +103,15 @@ service cloud.firestore {
 
     function isValidPayment(data) {
       return data.keys().hasAll(['userId', 'amount', 'month', 'year', 'status', 'createdAt']) &&
-             data.keys().hasOnly(['userId', 'amount', 'month', 'year', 'status', 'createdAt']) &&
+             data.keys().hasOnly(['userId', 'amount', 'month', 'year', 'status', 'details', 'createdAt', 'updatedAt']) &&
              data.userId is string && data.userId.size() > 0 &&
              data.amount is number && data.amount >= 0 &&
              data.month is string && data.month.size() > 0 &&
              data.year is number && data.year >= 2000 &&
              data.status in ['pending', 'paid'] &&
-             data.createdAt is timestamp;
+             (!('details' in data) || (data.details is list)) &&
+             data.createdAt is timestamp &&
+             (!('updatedAt' in data) || (data.updatedAt is timestamp));
     }
 
     function isValidLetterRequest(data) {
@@ -118,6 +120,17 @@ service cloud.firestore {
              data.userId is string && data.type is string && data.type.size() > 0 &&
              data.status in ['pending', 'approved', 'rejected'] &&
              data.createdAt is timestamp;
+    }
+
+    function isValidStaff(data) {
+      return data.keys().hasAll(['name', 'role', 'phone']) &&
+             data.keys().hasOnly(['name', 'role', 'phone', 'schedule', 'photoUrl', 'createdAt']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.role in ['Keamanan', 'Kebersihan'] &&
+             data.phone is string && data.phone.size() >= 10 && data.phone.size() <= 15 &&
+             (!('schedule' in data) || (data.schedule is string && data.schedule.size() < 200)) &&
+             (!('photoUrl' in data) || (data.photoUrl is string)) &&
+             (!('createdAt' in data) || (data.createdAt is timestamp));
     }
 
     // Rules
@@ -145,6 +158,11 @@ service cloud.firestore {
       allow create: if isAuthenticated() && isOwner(request.resource.data.userId) && isValidLetterRequest(request.resource.data);
       allow update: if isAdmin() && isValidLetterRequest(request.resource.data);
       allow delete: if isAdmin();
+    }
+
+    match /staff/{staffId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin() && (request.method == 'delete' || isValidStaff(request.resource.data));
     }
   }
 }

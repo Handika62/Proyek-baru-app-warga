@@ -24,6 +24,8 @@ import {
   orderBy, 
   where,
   addDoc, 
+  updateDoc,
+  deleteDoc,
   serverTimestamp,
   Timestamp,
   getDocFromServer
@@ -43,7 +45,10 @@ import {
   Clock,
   ChevronRight,
   Menu,
-  X
+  X,
+  Shield,
+  Trash2,
+  Phone
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -136,6 +141,7 @@ interface Payment {
   month: string;
   year: number;
   status: 'pending' | 'paid';
+  details?: { name: string; amount: number }[];
   createdAt: Timestamp;
 }
 
@@ -145,6 +151,16 @@ interface LetterRequest {
   type: string;
   status: 'pending' | 'approved' | 'rejected';
   reason?: string;
+  createdAt: Timestamp;
+}
+
+interface Staff {
+  id: string;
+  name: string;
+  role: 'Keamanan' | 'Kebersihan';
+  phone: string;
+  schedule?: string;
+  photoUrl?: string;
   createdAt: Timestamp;
 }
 
@@ -756,12 +772,68 @@ const CreateAnnouncementModal = ({ onClose, profile }: { onClose: () => void, pr
   );
 };
 
+const PaymentDetailsModal = ({ payment, onClose }: { payment: Payment, onClose: () => void }) => {
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
+      <motion.div 
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-8"
+      >
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-bold text-slate-900">Rincian Tagihan</h2>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full">
+            <X className="w-5 h-5 text-slate-400" />
+          </button>
+        </div>
+
+        <div className="mb-6 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+          <p className="text-xs font-bold text-slate-400 uppercase mb-1">Periode</p>
+          <p className="text-slate-900 font-bold">{payment.month} {payment.year}</p>
+        </div>
+
+        <div className="space-y-4 mb-8">
+          {payment.details && payment.details.length > 0 ? (
+            payment.details.map((item, idx) => (
+              <div key={idx} className="flex justify-between items-center py-2 border-b border-slate-50">
+                <span className="text-slate-600">{item.name}</span>
+                <span className="font-bold text-slate-900">Rp {item.amount.toLocaleString('id-ID')}</span>
+              </div>
+            ))
+          ) : (
+            <div className="flex justify-between items-center py-2 border-b border-slate-50">
+              <span className="text-slate-600">Iuran Bulanan</span>
+              <span className="font-bold text-slate-900">Rp {payment.amount.toLocaleString('id-ID')}</span>
+            </div>
+          )}
+          <div className="flex justify-between items-center pt-4">
+            <span className="font-bold text-slate-900">Total Tagihan</span>
+            <span className="font-bold text-blue-600 text-lg">Rp {payment.amount.toLocaleString('id-ID')}</span>
+          </div>
+        </div>
+
+        <button 
+          onClick={onClose}
+          className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-slate-800 transition-all"
+        >
+          Tutup
+        </button>
+      </motion.div>
+    </div>
+  );
+};
+
 const CreatePaymentModal = ({ resident, onClose, onSuccess }: { resident: UserProfile, onClose: () => void, onSuccess: () => void }) => {
-  const [amount, setAmount] = useState('20000');
+  const [details, setDetails] = useState<{ name: string; amount: string }[]>([
+    { name: 'Iuran Keamanan', amount: '10000' },
+    { name: 'Iuran Kebersihan', amount: '10000' }
+  ]);
   const [month, setMonth] = useState(new Intl.DateTimeFormat('id-ID', { month: 'long' }).format(new Date()));
   const [year, setYear] = useState(new Date().getFullYear().toString());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const totalAmount = details.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -770,10 +842,11 @@ const CreatePaymentModal = ({ resident, onClose, onSuccess }: { resident: UserPr
     try {
       await addDoc(collection(db, 'payments'), {
         userId: resident.uid,
-        amount: Number(amount),
+        amount: totalAmount,
         month,
         year: Number(year),
         status: 'pending',
+        details: details.map(d => ({ name: d.name, amount: Number(d.amount) })),
         createdAt: serverTimestamp()
       });
       onSuccess();
@@ -786,12 +859,20 @@ const CreatePaymentModal = ({ resident, onClose, onSuccess }: { resident: UserPr
     }
   };
 
+  const addDetail = () => setDetails([...details, { name: '', amount: '' }]);
+  const removeDetail = (index: number) => setDetails(details.filter((_, i) => i !== index));
+  const updateDetail = (index: number, field: 'name' | 'amount', value: string) => {
+    const newDetails = [...details];
+    newDetails[index][field] = value;
+    setDetails(newDetails);
+  };
+
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
       <motion.div 
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-8"
+        className="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-8 max-h-[90vh] overflow-y-auto"
       >
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-bold text-slate-900">Buat Tagihan Baru</h2>
@@ -806,17 +887,7 @@ const CreatePaymentModal = ({ resident, onClose, onSuccess }: { resident: UserPr
           <p className="text-blue-700 text-xs">{resident.address}</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Jumlah Iuran (Rp)</label>
-            <input 
-              type="number" 
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-              required
-            />
-          </div>
+        <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Bulan</label>
@@ -842,6 +913,57 @@ const CreatePaymentModal = ({ resident, onClose, onSuccess }: { resident: UserPr
             </div>
           </div>
 
+          <div className="space-y-3">
+            <div className="flex justify-between items-center">
+              <label className="block text-xs font-bold text-slate-400 uppercase">Rincian Biaya</label>
+              <button 
+                type="button" 
+                onClick={addDetail}
+                className="text-blue-600 text-xs font-bold flex items-center gap-1 hover:underline"
+              >
+                <Plus className="w-3 h-3" /> Tambah Item
+              </button>
+            </div>
+            {details.map((detail, idx) => (
+              <div key={idx} className="flex gap-2 items-start">
+                <div className="flex-1">
+                  <input 
+                    type="text" 
+                    placeholder="Nama Biaya"
+                    value={detail.name}
+                    onChange={(e) => updateDetail(idx, 'name', e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:ring-1 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+                <div className="w-32">
+                  <input 
+                    type="number" 
+                    placeholder="Jumlah"
+                    value={detail.amount}
+                    onChange={(e) => updateDetail(idx, 'amount', e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:ring-1 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+                {details.length > 1 && (
+                  <button 
+                    type="button" 
+                    onClick={() => removeDetail(idx)}
+                    className="p-2 text-red-400 hover:bg-red-50 rounded-lg transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div className="p-4 bg-slate-900 rounded-2xl flex justify-between items-center">
+            <span className="text-slate-400 text-sm font-bold uppercase">Total Tagihan</span>
+            <span className="text-white font-bold text-lg">Rp {totalAmount.toLocaleString('id-ID')}</span>
+          </div>
+
           {error && <p className="text-red-500 text-xs font-medium">{error}</p>}
 
           <button 
@@ -850,6 +972,108 @@ const CreatePaymentModal = ({ resident, onClose, onSuccess }: { resident: UserPr
             className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 disabled:opacity-50"
           >
             {loading ? 'Memproses...' : 'Buat Tagihan'}
+          </button>
+        </form>
+      </motion.div>
+    </div>
+  );
+};
+
+const CreateStaffModal = ({ onClose }: { onClose: () => void }) => {
+  const [name, setName] = useState('');
+  const [role, setRole] = useState<'Keamanan' | 'Kebersihan'>('Keamanan');
+  const [phone, setPhone] = useState('');
+  const [schedule, setSchedule] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    try {
+      await addDoc(collection(db, 'staff'), {
+        name,
+        role,
+        phone,
+        schedule,
+        createdAt: serverTimestamp()
+      });
+      onClose();
+    } catch (err) {
+      setError('Gagal menambah petugas.');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
+      <motion.div 
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-8"
+      >
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-bold text-slate-900">Tambah Petugas Baru</h2>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full">
+            <X className="w-5 h-5 text-slate-400" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Nama Petugas</label>
+            <input 
+              type="text" 
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Peran</label>
+            <select 
+              value={role}
+              onChange={(e) => setRole(e.target.value as any)}
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+            >
+              <option value="Keamanan">Keamanan (Satpam)</option>
+              <option value="Kebersihan">Kebersihan (Petugas Sampah)</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Nomor WhatsApp</label>
+            <input 
+              type="tel" 
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="0812..."
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Jadwal / Shift</label>
+            <input 
+              type="text" 
+              value={schedule}
+              onChange={(e) => setSchedule(e.target.value)}
+              placeholder="Senin - Jumat, 08:00 - 17:00"
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+            />
+          </div>
+
+          {error && <p className="text-red-500 text-xs font-medium">{error}</p>}
+
+          <button 
+            type="submit"
+            disabled={loading}
+            className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 disabled:opacity-50"
+          >
+            {loading ? 'Memproses...' : 'Tambah Petugas'}
           </button>
         </form>
       </motion.div>
@@ -868,12 +1092,15 @@ export default function App() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [letterRequests, setLetterRequests] = useState<LetterRequest[]>([]);
+  const [staff, setStaff] = useState<Staff[]>([]);
+  const [isAddingStaff, setIsAddingStaff] = useState(false);
   const [residents, setResidents] = useState<UserProfile[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedResident, setSelectedResident] = useState<UserProfile | null>(null);
   const [isAddingResident, setIsAddingResident] = useState(false);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [selectedResidentForPayment, setSelectedResidentForPayment] = useState<UserProfile | null>(null);
+  const [viewingPayment, setViewingPayment] = useState<Payment | null>(null);
   const [isCreatingAnnouncement, setIsCreatingAnnouncement] = useState(false);
   const [editingResident, setEditingResident] = useState<UserProfile | null>(null);
 
@@ -1000,6 +1227,12 @@ export default function App() {
       handleFirestoreError(error, OperationType.LIST, 'letterRequests');
     });
 
+    const unsubStaff = onSnapshot(collection(db, 'staff'), (snapshot) => {
+      setStaff(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Staff)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'staff');
+    });
+
     if (profile.role === 'admin') {
       const unsubResidents = onSnapshot(collection(db, 'users'), (snapshot) => {
         setResidents(snapshot.docs.map(doc => doc.data() as UserProfile));
@@ -1010,6 +1243,7 @@ export default function App() {
         unsubAnnouncements();
         unsubPayments();
         unsubLetters();
+        unsubStaff();
         unsubResidents();
       };
     }
@@ -1018,6 +1252,7 @@ export default function App() {
       unsubAnnouncements();
       unsubPayments();
       unsubLetters();
+      unsubStaff();
     };
   }, [profile]);
 
@@ -1057,6 +1292,7 @@ export default function App() {
             <NavItem id="announcements" icon={Bell} label="Pengumuman" />
             <NavItem id="payments" icon={CreditCard} label="Iuran Warga" />
             <NavItem id="letters" icon={FileText} label="Surat Pengantar" />
+            <NavItem id="staff" icon={Shield} label="Petugas" />
             {profile.role === 'admin' && <NavItem id="residents" icon={Users} label="Data Warga" />}
           </nav>
 
@@ -1151,6 +1387,7 @@ export default function App() {
                   <NavItem id="announcements" icon={Bell} label="Pengumuman" />
                   <NavItem id="payments" icon={CreditCard} label="Iuran Warga" />
                   <NavItem id="letters" icon={FileText} label="Surat Pengantar" />
+                  <NavItem id="staff" icon={Shield} label="Petugas" />
                   {profile.role === 'admin' && <NavItem id="residents" icon={Users} label="Data Warga" />}
                 </nav>
                 <div className="mt-auto pt-6 border-t border-slate-100">
@@ -1545,20 +1782,35 @@ export default function App() {
                               </span>
                             </td>
                             <td className="px-6 py-4 text-right">
-                              {pay.status === 'pending' && profile.role === 'resident' && (
-                                <button className="text-blue-600 font-bold text-sm hover:underline">Bayar Sekarang</button>
-                              )}
-                              {profile.role === 'admin' && pay.status === 'pending' && (
+                              <div className="flex justify-end gap-3 items-center">
                                 <button 
-                                  onClick={async () => {
-                                    // In a real app, update status to paid
-                                    alert("Fitur konfirmasi pembayaran admin");
-                                  }}
-                                  className="text-emerald-600 font-bold text-sm hover:underline"
+                                  onClick={() => setViewingPayment(pay)}
+                                  className="text-slate-400 hover:text-slate-600 transition-colors"
+                                  title="Lihat Rincian"
                                 >
-                                  Konfirmasi
+                                  <FileText className="w-4 h-4" />
                                 </button>
-                              )}
+                                {pay.status === 'pending' && profile.role === 'resident' && (
+                                  <button className="text-blue-600 font-bold text-sm hover:underline">Bayar Sekarang</button>
+                                )}
+                                {profile.role === 'admin' && pay.status === 'pending' && (
+                                  <button 
+                                    onClick={async () => {
+                                      try {
+                                        await updateDoc(doc(db, 'payments', pay.id), {
+                                          status: 'paid',
+                                          updatedAt: serverTimestamp()
+                                        });
+                                      } catch (error) {
+                                        handleFirestoreError(error, OperationType.UPDATE, `payments/${pay.id}`);
+                                      }
+                                    }}
+                                    className="text-emerald-600 font-bold text-sm hover:underline"
+                                  >
+                                    Konfirmasi
+                                  </button>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -1634,6 +1886,98 @@ export default function App() {
                 {letterRequests.length === 0 && (
                   <div className="text-center py-20 bg-white rounded-3xl border border-slate-200">
                     <p className="text-slate-400">Belum ada pengajuan surat.</p>
+                  </div>
+                )}
+              </motion.div>
+            )}
+
+            {activeTab === 'staff' && (
+              <motion.div 
+                key="staff"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="space-y-6"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-2xl font-bold text-slate-900">Petugas Lingkungan</h2>
+                    <p className="text-slate-500 text-sm">Daftar petugas keamanan dan kebersihan RT</p>
+                  </div>
+                  {profile.role === 'admin' && (
+                    <button 
+                      onClick={() => setIsAddingStaff(true)}
+                      className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl font-semibold shadow-md"
+                    >
+                      <Plus className="w-4 h-4" /> Tambah Petugas
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {staff.map(member => (
+                    <div key={member.id} className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden group">
+                      <div className={`absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 rounded-full opacity-5 group-hover:scale-110 transition-transform ${member.role === 'Keamanan' ? 'bg-blue-600' : 'bg-emerald-600'}`} />
+                      
+                      <div className="flex items-start justify-between mb-4">
+                        <div className={`p-3 rounded-2xl ${member.role === 'Keamanan' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                          {member.role === 'Keamanan' ? <Shield className="w-6 h-6" /> : <Trash2 className="w-6 h-6" />}
+                        </div>
+                        {profile.role === 'admin' && (
+                          <button 
+                            onClick={async () => {
+                              if (confirm(`Hapus petugas ${member.name}?`)) {
+                                try {
+                                  await deleteDoc(doc(db, 'staff', member.id));
+                                } catch (error) {
+                                  handleFirestoreError(error, OperationType.DELETE, `staff/${member.id}`);
+                                }
+                              }
+                            }}
+                            className="p-2 text-slate-300 hover:text-red-500 transition-colors"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+
+                      <h4 className="text-lg font-bold text-slate-900 mb-1">{member.name}</h4>
+                      <p className={`text-xs font-bold uppercase mb-4 ${member.role === 'Keamanan' ? 'text-blue-500' : 'text-emerald-500'}`}>
+                        Petugas {member.role}
+                      </p>
+
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-3 text-slate-600">
+                          <Clock className="w-4 h-4 text-slate-400" />
+                          <span className="text-sm">{member.schedule || 'Jadwal belum diatur'}</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <Phone className="w-4 h-4 text-slate-400" />
+                          <button 
+                            onClick={() => window.open(`https://wa.me/${member.phone.replace(/^0/, '62')}`, '_blank')}
+                            className="text-sm font-bold text-slate-900 hover:text-blue-600 transition-colors"
+                          >
+                            {member.phone}
+                          </button>
+                        </div>
+                      </div>
+
+                      <button 
+                        onClick={() => window.open(`https://wa.me/${member.phone.replace(/^0/, '62')}`, '_blank')}
+                        className="w-full mt-6 py-3 bg-slate-50 text-slate-900 rounded-xl text-sm font-bold hover:bg-slate-100 transition-all flex items-center justify-center gap-2"
+                      >
+                        Hubungi via WhatsApp
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                {staff.length === 0 && (
+                  <div className="text-center py-20 bg-white rounded-3xl border border-slate-200">
+                    <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Shield className="w-8 h-8 text-slate-300" />
+                    </div>
+                    <p className="text-slate-400">Belum ada data petugas lingkungan.</p>
                   </div>
                 )}
               </motion.div>
@@ -1857,10 +2201,21 @@ export default function App() {
             }}
           />
         )}
+        {viewingPayment && (
+          <PaymentDetailsModal 
+            payment={viewingPayment}
+            onClose={() => setViewingPayment(null)}
+          />
+        )}
         {isCreatingAnnouncement && profile && (
           <CreateAnnouncementModal 
             profile={profile}
             onClose={() => setIsCreatingAnnouncement(false)}
+          />
+        )}
+        {isAddingStaff && (
+          <CreateStaffModal 
+            onClose={() => setIsAddingStaff(false)}
           />
         )}
       </div>

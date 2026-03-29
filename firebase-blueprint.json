@@ -50,6 +50,17 @@
         "month": { "type": "string" },
         "year": { "type": "number" },
         "status": { "type": "string", "enum": ["pending", "paid"] },
+        "details": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "amount": { "type": "number" }
+            }
+          },
+          "description": "Breakdown of the payment (e.g., Security, Trash)"
+        },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["userId", "amount", "month", "year", "status"]
@@ -67,6 +78,21 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["userId", "type", "status", "createdAt"]
+    },
+    "Staff": {
+      "title": "Staff",
+      "description": "Security and trash collection personnel",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string", "enum": ["Keamanan", "Kebersihan"] },
+        "phone": { "type": "string" },
+        "schedule": { "type": "string", "description": "Work schedule or shift" },
+        "photoUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "role", "phone"]
     }
   },
   "firestore": {
@@ -85,6 +111,10 @@
     "/letterRequests/{requestId}": {
       "schema": "LetterRequest",
       "description": "Letter requests"
+    },
+    "/staff/{staffId}": {
+      "schema": "Staff",
+      "description": "Staff members"
     }
   }
 }
